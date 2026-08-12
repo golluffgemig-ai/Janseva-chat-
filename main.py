@@ -1,19 +1,19 @@
 import os
 import sqlite3
-from flask import Flask, render_template_string, request, jsonify, session, redirect, send_from_directory
+from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify, send_from_directory
 
 app = Flask(__name__)
-app.secret_key = 'jan_seva_secret_key'
+app.secret_key = "janseva_secret_key"
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# SQLite Database Init
+# Database Setup
 def init_db():
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, type TEXT, data TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS messages 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, content TEXT, type TEXT)''')
     conn.commit()
     conn.close()
 
@@ -25,142 +25,190 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jan Seva Chat App</title>
+    <title>Jan Seva Free Chat</title>
     <style>
-        * { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #e5ddd5; margin: 0; padding: 10px; }
-        .card { max-width: 450px; margin: auto; background: white; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); overflow: hidden; }
-        .header { background: #075e54; color: white; padding: 15px; text-align: center; }
-        .header h2 { margin: 0; font-size: 20px; }
-        .auth-box { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .auth-box input { padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        .auth-box button { background: #075e54; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; }
-        .msg-box { height: 380px; overflow-y: auto; padding: 12px; background: #efeae2; }
-        .msg { margin-bottom: 10px; padding: 10px; border-radius: 8px; max-width: 80%; background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.1); word-wrap: break-word; }
-        .msg b { color: #075e54; font-size: 13px; display: block; margin-bottom: 3px; }
-        .msg img { max-width: 100%; border-radius: 6px; margin-top: 5px; }
-        .msg audio { width: 100%; margin-top: 5px; }
-        .controls { padding: 12px; background: #f0f0f0; display: flex; flex-direction: column; gap: 8px; }
-        .row { display: flex; gap: 6px; }
-        input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 20px; outline: none; }
-        button { background: #128c7e; color: white; border: none; padding: 10px 15px; border-radius: 20px; font-weight: bold; cursor: pointer; }
-        .btn-rec { background: #d9534f; }
-        .top-bar { display: flex; justify-content: space-between; align-items: center; padding: 8px 15px; background: #128c7e; color: white; font-size: 14px; }
-        .top-bar a { color: #ffeb3b; text-decoration: none; font-weight: bold; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+        body { background-color: #e5ddd5; display: flex; justify-content: center; height: 100vh; }
+        .app-container { width: 100%; max-width: 450px; background: #fff; display: flex; flex-direction: column; height: 100vh; border-radius: 10px; overflow: hidden; }
+        .header { background: #006652; color: white; padding: 12px; text-align: center; position: relative; }
+        .header h2 { font-size: 18px; margin-bottom: 2px; }
+        .header p { font-size: 12px; opacity: 0.9; }
+        .sub-bar { background: #004d3d; color: #fff; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+        .lang-select { background: #fff; color: #333; border: none; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+        .chat-box { flex: 1; padding: 10px; overflow-y: auto; background: #efeae2; display: flex; flex-direction: column; gap: 8px; }
+        .msg { max-width: 80%; padding: 8px 12px; border-radius: 8px; font-size: 14px; word-wrap: break-word; }
+        .msg-self { background: #dcf8c6; align-self: flex-end; }
+        .msg-other { background: #ffffff; align-self: flex-start; border: 1px solid #ddd; }
+        .user-name { font-weight: bold; font-size: 11px; color: #006652; margin-bottom: 3px; }
+        .input-area { padding: 10px; background: #f0f0f0; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #ccc; }
+        .text-row { display: flex; gap: 5px; }
+        .text-row input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 20px; font-size: 14px; outline: none; }
+        .text-row button { background: #008a70; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+        .btn-row { display: flex; gap: 8px; }
+        .btn-row label, .btn-row button { flex: 1; background: #34b7f1; color: white; text-align: center; padding: 8px; border-radius: 20px; font-size: 12px; border: none; font-weight: bold; cursor: pointer; }
+        .btn-row .voice-btn { background: #e55151; }
+        .login-box { padding: 20px; text-align: center; margin-auto; width: 90%; }
+        .login-box input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 8px; }
+        .login-box button { width: 100%; padding: 10px; background: #006652; color: white; border: none; border-radius: 8px; font-weight: bold; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <div class="header">
-            <h2>🚀 Jan Seva Free Chat</h2>
-            <small>Bina Recharge Chat & Share</small>
-        </div>
 
-        {% if not session.user %}
-        <div class="auth-box">
-            <h3>Login / Register</h3>
-            <form action="/login_register" method="POST">
-                <input type="text" name="username" placeholder="Apna Naam / Username" required style="width:100%; margin-bottom:8px;">
-                <input type="password" name="password" placeholder="Password" required style="width:100%; margin-bottom:12px;">
-                <button type="submit" style="width:100%;">Enter Chat App</button>
-            </form>
-        </div>
-        {% else %}
-        <div class="top-bar">
-            <span>👤 Logged in as: <b>{{ session.user }}</b></span>
-            <a href="/logout">Logout</a>
-        </div>
-        
-        <div class="msg-box" id="msgBox"></div>
-
-        <div class="controls">
-            <div class="row">
-                <input type="text" id="txtInput" placeholder="Message likhein...">
-                <button onclick="sendText()">Send</button>
-            </div>
-            <div class="row">
-                <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="uploadPhoto()">
-                <button onclick="document.getElementById('fileInput').click()" style="background:#34b7f1; flex:1;">📷 Photo Bhejein</button>
-                <button id="recBtn" onclick="toggleRecord()" class="btn-rec" style="flex:1;">🎙️ Voice Record</button>
-            </div>
-        </div>
-        {% endif %}
+<div class="app-container">
+    <div class="header">
+        <h2>🚀 Jan Seva Free Chat</h2>
+        <p id="subtitle">Bina Recharge Chat & Share</p>
     </div>
 
-    {% if session.user %}
-    <script>
-        let mediaRecorder;
-        let audioChunks = [];
-        let isRecording = false;
+    {% if not session.get('user') %}
+    <div class="login-box">
+        <h3>Login / Register</h3>
+        <form method="POST" action="/login">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Enter Chat App</button>
+        </form>
+    </div>
+    {% else %}
+    <div class="sub-bar">
+        <span>👤 Logged in as: <b>{{ session['user'] }}</b></span>
+        <div>
+            <select class="lang-select" onchange="changeLanguage(this.value)">
+                <option value="hinglish">Hinglish</option>
+                <option value="hindi">हिंदी</option>
+                <option value="english">English</option>
+            </select>
+            <a href="/logout" style="color:#ffdddd; margin-left:8px; text-decoration:none;" id="logoutText">Logout</a>
+        </div>
+    </div>
 
-        async function loadMessages() {
-            let res = await fetch('/get_messages');
-            let data = await res.json();
-            let box = document.getElementById('msgBox');
-            box.innerHTML = '';
-            data.forEach(m => {
-                let div = document.createElement('div');
-                div.className = 'msg';
-                let content = `<b>${m.username}</b>`;
-                if(m.type === 'text') content += m.data;
-                if(m.type === 'image') content += `<img src="${m.data}">`;
-                if(m.type === 'audio') content += `<audio controls src="${m.data}"></audio>`;
-                div.innerHTML = content;
-                box.appendChild(div);
-            });
-            box.scrollTop = box.scrollHeight;
-        }
+    <div class="chat-box" id="chatBox"></div>
 
-        async function sendText() {
-            let inp = document.getElementById('txtInput');
-            if(!inp.value) return;
-            await fetch('/send_text', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({text: inp.value})
-            });
-            inp.value = '';
-            loadMessages();
-        }
-
-        async function uploadPhoto() {
-            let inp = document.getElementById('fileInput');
-            if(!inp.files[0]) return;
-            let fd = new FormData();
-            fd.append('file', inp.files[0]);
-            await fetch('/upload', { method: 'POST', body: fd });
-            inp.value = '';
-            loadMessages();
-        }
-
-        async function toggleRecord() {
-            let btn = document.getElementById('recBtn');
-            if(!isRecording) {
-                let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-                mediaRecorder.onstop = async () => {
-                    let blob = new Blob(audioChunks, { type: 'audio/webm' });
-                    let fd = new FormData();
-                    fd.append('file', blob, 'voice.webm');
-                    await fetch('/upload', { method: 'POST', body: fd });
-                    loadMessages();
-                };
-                mediaRecorder.start();
-                isRecording = true;
-                btn.innerText = '⏹️ Stop & Send';
-            } else {
-                mediaRecorder.stop();
-                isRecording = false;
-                btn.innerText = '🎙️ Voice Record';
-            }
-        }
-
-        setInterval(loadMessages, 2000);
-        loadMessages();
-    </script>
+    <div class="input-area">
+        <form id="msgForm" class="text-row">
+            <input type="text" id="messageInput" placeholder="Message likhein..." required autocomplete="off">
+            <button type="submit" id="sendBtn">Send</button>
+        </form>
+        <div class="btn-row">
+            <label id="photoBtn">📷 Photo Bhejein
+                <input type="file" id="photoInput" accept="image/*" style="display:none;" onchange="uploadPhoto()">
+            </label>
+            <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()">🎙️ Voice Record</button>
+        </div>
+    </div>
     {% endif %}
+</div>
+
+<script>
+let userIsScrolling = false;
+const chatBox = document.getElementById('chatBox');
+
+if (chatBox) {
+    // Detect if user scrolls up manually
+    chatBox.addEventListener('scroll', () => {
+        const isAtBottom = chatBox.scrollHeight - chatBox.clientHeight <= chatBox.scrollTop + 60;
+        userIsScrolling = !isAtBottom;
+    });
+}
+
+function fetchMessages() {
+    if (!chatBox) return;
+    fetch('/get_messages')
+        .then(res => res.json())
+        .then(data => {
+            let html = '';
+            data.forEach(m => {
+                let isSelf = m.user === "{{ session.get('user') }}";
+                let cls = isSelf ? 'msg-self' : 'msg-other';
+                html += `<div class="msg ${cls}">
+                            <div class="user-name">${m.user}</div>`;
+                if(m.type === 'text') {
+                    html += `<div>${m.content}</div>`;
+                } else if(m.type === 'image') {
+                    html += `<img src="${m.content}" style="max-width:100%; border-radius:5px;">`;
+                } else if(m.type === 'audio') {
+                    html += `<audio controls src="${m.content}" style="width:100%;"></audio>`;
+                }
+                html += `</div>`;
+            });
+            chatBox.innerHTML = html;
+            
+            // Auto-scroll logic: scroll down ONLY if user hasn't scrolled up manually
+            if (!userIsScrolling) {
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        });
+}
+
+if (document.getElementById('msgForm')) {
+    document.getElementById('msgForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        let input = document.getElementById('messageInput');
+        let text = input.value;
+        if (!text) return;
+        fetch('/send', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-encoding'},
+            body: new URLSearchParams({'content': text, 'type': 'text'})
+        }).then(() => {
+            input.value = '';
+            userIsScrolling = false; // Force scroll to bottom on new message send
+            fetchMessages();
+        });
+    });
+
+    setInterval(fetchMessages, 2000);
+    fetchMessages();
+}
+
+function uploadPhoto() {
+    let file = document.getElementById('photoInput').files[0];
+    if (!file) return;
+    let formData = new FormData();
+    formData.append('file', file);
+    fetch('/upload_file', { method: 'POST', body: formData })
+    .then(() => { userIsScrolling = false; fetchMessages(); });
+}
+
+// Language Switcher
+const langData = {
+    hinglish: {
+        subtitle: "Bina Recharge Chat & Share",
+        placeholder: "Message likhein...",
+        send: "Send",
+        photo: "📷 Photo Bhejein",
+        voice: "🎙️ Voice Record",
+        logout: "Logout"
+    },
+    hindi: {
+        subtitle: "बिना रिचार्ज चैट और शेयर करें",
+        placeholder: "संदेश लिखें...",
+        send: "भेजें",
+        photo: "📷 फोटो भेजें",
+        voice: "🎙️ आवाज़ रिकॉर्ड करें",
+        logout: "लॉग आउट"
+    },
+    english: {
+        subtitle: "Free Chat & Media Sharing",
+        placeholder: "Type a message...",
+        send: "Send",
+        photo: "📷 Send Photo",
+        voice: "🎙️ Voice Record",
+        logout: "Logout"
+    }
+};
+
+function changeLanguage(lang) {
+    let t = langData[lang];
+    document.getElementById('subtitle').innerText = t.subtitle;
+    document.getElementById('messageInput').placeholder = t.placeholder;
+    document.getElementById('sendBtn').innerText = t.send;
+    document.getElementById('photoBtn').childNodes[0].nodeValue = t.photo + ' ';
+    document.getElementById('voiceBtn').innerText = t.voice;
+    document.getElementById('logoutText').innerText = t.logout;
+}
+</script>
+
 </body>
 </html>
 """
@@ -169,78 +217,63 @@ HTML_TEMPLATE = """
 def home():
     return render_template_string(HTML_TEMPLATE)
 
-@app.route('/login_register', methods=['POST'])
-def login_register():
-    username = request.form['username'].strip()
-    password = request.form['password'].strip()
-    
-    conn = sqlite3.connect('chat.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE username = ?", (username,))
-    user = c.fetchone()
-    
-    if user:
-        if user[2] == password:
-            session['user'] = username
-        else:
-            return "Incorrect Password! <a href='/'>Try again</a>"
-    else:
-        c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
-        conn.commit()
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form.get('username')
+    if username:
         session['user'] = username
-        
-    conn.close()
-    return redirect('/')
+    return redirect(url_for('home'))
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
-    return redirect('/')
+    return redirect(url_for('home'))
 
 @app.route('/get_messages')
 def get_messages():
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
-    c.execute("SELECT username, type, data FROM messages")
+    c.execute("SELECT user, content, type FROM messages ORDER BY id ASC")
     rows = c.fetchall()
     conn.close()
-    
-    msgs = [{'username': r[0], 'type': r[1], 'data': r[2]} for r in rows]
-    return jsonify(msgs)
+    messages = [{'user': r[0], 'content': r[1], 'type': r[2]} for r in rows]
+    return jsonify(messages)
 
-@app.route('/send_text', methods=['POST'])
-def send_text():
-    if 'user' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    data = request.json
-    conn = sqlite3.connect('chat.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO messages (username, type, data) VALUES (?, ?, ?)", (session['user'], 'text', data['text']))
-    conn.commit()
-    conn.close()
+@app.route('/send', methods=['POST'])
+def send():
+    user = session.get('user', 'Guest')
+    content = request.form.get('content')
+    mtype = request.form.get('type', 'text')
+    if content:
+        conn = sqlite3.connect('chat.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO messages (user, content, type) VALUES (?, ?, ?)", (user, content, mtype))
+        conn.commit()
+        conn.close()
     return jsonify({'status': 'ok'})
 
-@app.route('/upload', methods=['POST'])
-def upload():
-    if 'user' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    file = request.files['file']
-    filename = f"{session['user']}_{file.filename}"
-    path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(path)
-    
-    file_type = 'audio' if file.filename.endswith('.webm') else 'image'
-    conn = sqlite3.connect('chat.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO messages (username, type, data) VALUES (?, ?, ?)", (session['user'], file_type, f'/uploads/{filename}'))
-    conn.commit()
-    conn.close()
+@app.route('/upload_file', methods=['POST'])
+def upload_file():
+    user = session.get('user', 'Guest')
+    if 'file' in request.files:
+        file = request.files['file']
+        if file.filename != '':
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            file.save(filepath)
+            file_url = f"/uploads/{file.filename}"
+            
+            mtype = 'image' if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')) else 'audio'
+            
+            conn = sqlite3.connect('chat.db')
+            c = conn.cursor()
+            c.execute("INSERT INTO messages (user, content, type) VALUES (?, ?, ?)", (user, file_url, mtype))
+            conn.commit()
+            conn.close()
     return jsonify({'status': 'ok'})
 
 @app.route('/uploads/<filename>')
-def serve_file(filename):
+def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-
+    app.run(host='0.0.0.0', port=10000)
