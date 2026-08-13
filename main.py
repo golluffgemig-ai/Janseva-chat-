@@ -1,12 +1,11 @@
-from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify, send_from_directory
+from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
 import sqlite3
 import os
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.secret_key = 'janseva_chat_ultra_secret_2026'
+app.secret_key = 'janseva_chat_whatsapp_ultra_key_2026'
 
-# Folder setup for file uploads
 UPLOAD_FOLDER = 'static/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -16,17 +15,26 @@ def init_db():
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, bio TEXT DEFAULT '', avatar TEXT DEFAULT '')''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  username TEXT UNIQUE, 
+                  password TEXT, 
+                  bio TEXT DEFAULT 'Hey there! I am using Janseva Chat', 
+                  avatar TEXT DEFAULT '',
+                  lock_enabled INTEGER DEFAULT 0,
+                  screen_pin TEXT DEFAULT '')''')
     c.execute('''CREATE TABLE IF NOT EXISTS messages
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, sender TEXT, room TEXT DEFAULT 'public', content TEXT, msg_type TEXT DEFAULT 'text', file_url TEXT DEFAULT '', timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  sender TEXT, 
+                  room TEXT DEFAULT 'Public Room', 
+                  content TEXT, 
+                  msg_type TEXT DEFAULT 'text', 
+                  file_url TEXT DEFAULT '', 
+                  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     c.execute('''CREATE TABLE IF NOT EXISTS follows
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, follower TEXT, followed TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS groups
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, created_by TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS reactions
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, msg_id INTEGER, username TEXT, emoji TEXT)''')
     
-    # Default Public Room
     try:
         c.execute("INSERT INTO groups (name, created_by) VALUES ('Public Room', 'System')")
     except:
@@ -36,140 +44,192 @@ def init_db():
 
 init_db()
 
-# --- HTML / UI CODE ---
+# --- HTML / CSS / JS UI ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="hi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Janseva Chat Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Janseva Chat WhatsApp Style</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #0f172a; color: #f8fafc; height: 100vh; display: flex; justify-content: center; align-items: center; }
-        .container { width: 100%; max-width: 450px; height: 100vh; max-height: 750px; background: #1e293b; display: flex; flex-direction: column; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-        .header { background: #0284c7; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
-        .header-actions { display: flex; gap: 8px; align-items: center; }
-        .btn-sm { background: #334155; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
-        .btn-danger { background: #ef4444; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Helvetica, Arial, sans-serif; }
+        body { background-color: #0b141a; color: #e9edef; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+        .container { width: 100%; max-width: 450px; height: 100vh; background: #111b21; display: flex; flex-direction: column; position: relative; box-shadow: 0 0 15px rgba(0,0,0,0.7); }
+        
+        /* Top App Bar */
+        .header { background: #202c33; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222d34; }
+        .user-info { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 1rem; color: #e9edef; }
+        .online-dot { width: 9px; height: 9px; background-color: #25d366; border-radius: 50%; display: inline-block; }
+        .header-actions { display: flex; gap: 6px; }
+        .btn-sm { background: #2a3942; color: #d1d7db; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .btn-danger { background: #ea868f; color: #000; font-weight: bold; }
         
         /* Navigation Tabs */
-        .tabs { display: flex; background: #0f172a; border-bottom: 1px solid #334155; }
-        .tab { flex: 1; text-align: center; padding: 10px; cursor: pointer; font-size: 0.85rem; color: #94a3b8; }
-        .tab.active { color: #38bdf8; border-bottom: 2px solid #38bdf8; font-weight: bold; }
+        .tabs { display: flex; background: #111b21; border-bottom: 2px solid #222d34; }
+        .tab { flex: 1; text-align: center; padding: 12px 0; cursor: pointer; font-size: 0.9rem; color: #8696a0; font-weight: 500; }
+        .tab.active { color: #00a884; border-bottom: 3px solid #00a884; font-weight: bold; }
         
-        .section { display: none; flex: 1; flex-direction: column; overflow-y: auto; padding: 15px; }
+        /* Sections */
+        .section { display: none; flex: 1; flex-direction: column; overflow-y: auto; padding: 12px; position: relative; }
         .section.active { display: flex; }
 
-        /* Auth */
-        .auth-box { padding: 30px; display: flex; flex-direction: column; gap: 15px; }
-        input, select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; outline: none; margin-bottom: 10px; }
-        button.btn-main { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #0284c7; color: white; font-weight: bold; cursor: pointer; }
+        /* Auth Screen */
+        .auth-box { padding: 25px 20px; display: flex; flex-direction: column; gap: 14px; text-align: center; justify-content: center; height: 100%; }
+        input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #2a3942; background: #202c33; color: #e9edef; outline: none; margin-bottom: 8px; font-size: 0.95rem; }
+        button.btn-main { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #00a884; color: #111b21; font-weight: bold; cursor: pointer; font-size: 1rem; }
         
         /* Chat Box */
-        .chat-box { flex: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 82%; padding: 8px 12px; border-radius: 12px; font-size: 0.9rem; position: relative; word-wrap: break-word; }
-        .msg.sent { align-self: flex-end; background: #0284c7; color: white; }
-        .msg.received { align-self: flex-start; background: #334155; color: white; }
-        .msg img, .msg video { max-width: 100%; border-radius: 8px; margin-top: 5px; }
-        .sender-name { font-size: 0.7rem; color: #cbd5e1; font-weight: bold; display: block; margin-bottom: 2px; }
+        .chat-box { flex: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; background-color: #0b141a; background-image: radial-gradient(#1f2c34 1px, transparent 0); background-size: 16px 16px; }
+        .msg { max-width: 80%; padding: 8px 10px; border-radius: 8px; font-size: 0.9rem; position: relative; word-wrap: break-word; line-height: 1.3; }
+        .msg.sent { align-self: flex-end; background: #005c4b; color: #e9edef; border-top-right-radius: 0; }
+        .msg.received { align-self: flex-start; background: #202c33; color: #e9edef; border-top-left-radius: 0; }
+        .msg img, .msg video { max-width: 100%; border-radius: 6px; margin-top: 5px; }
+        .sender-name { font-size: 0.72rem; color: #00a884; font-weight: bold; display: block; margin-bottom: 2px; }
+        .msg-time { font-size: 0.65rem; color: #8696a0; text-align: right; margin-top: 4px; display: block; }
         
-        /* Reactions */
-        .reaction-bar { display: flex; gap: 4px; font-size: 0.75rem; background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 10px; margin-top: 4px; width: fit-content; }
-
-        /* Controls / Input Area */
-        .input-area { padding: 10px; background: #0f172a; display: flex; flex-direction: column; gap: 8px; }
+        /* Bottom Input Bar */
+        .input-area { padding: 8px; background: #202c33; display: flex; flex-direction: column; gap: 6px; }
         .input-row { display: flex; gap: 6px; align-items: center; }
-        .media-btns { display: flex; gap: 8px; font-size: 1.2rem; cursor: pointer; }
+        .icon-btn { font-size: 1.3rem; cursor: pointer; padding: 6px; color: #8696a0; }
+        .icon-btn:hover { color: #00a884; }
 
-        /* User List & Profile */
-        .user-card { display: flex; justify-content: space-between; align-items: center; background: #334155; padding: 10px; border-radius: 8px; margin-bottom: 8px; }
-        .avatar { width: 35px; height: 35px; border-radius: 50%; background: #0284c7; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 8px; }
+        /* Emoji Picker Popup */
+        .emoji-picker { display: none; background: #111b21; padding: 8px; border-radius: 8px; border: 1px solid #2a3942; flex-wrap: wrap; gap: 8px; max-height: 100px; overflow-y: auto; }
+        .emoji-picker span { font-size: 1.3rem; cursor: pointer; }
+
+        /* User List / Cards */
+        .card { background: #202c33; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #00a884; color: #111b21; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem; margin-right: 10px; }
+
+        /* Lock Overlay */
+        #lockScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0b141a; z-index: 9999; display: none; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- APP SCREEN LOCK OVERLAY -->
+        <div id="lockScreen">
+            <h2 style="color:#00a884; margin-bottom:15px;">🔒 App Locked</h2>
+            <p style="color:#8696a0; margin-bottom:15px;">Enter Passcode to unlock:</p>
+            <input type="password" id="unlockPin" placeholder="Enter Password/PIN" style="width:200px; text-align:center;">
+            <button class="btn-main" style="width:200px;" onclick="unlockApp()">Unlock</button>
+        </div>
+
         {% if not session.username %}
         <!-- AUTH SECTION -->
         <div class="auth-box">
-            <h2 style="text-align: center; color: #38bdf8;">Janseva Chat Pro</h2>
+            <h1 style="color: #00a884; margin-bottom:10px;">Janseva Chat</h1>
+            <p style="color: #8696a0; font-size:0.9rem;">WhatsApp Style Secure Chat App</p>
+            <br>
             <form action="/login" method="POST">
                 <input type="text" name="username" placeholder="Username" required>
                 <input type="password" name="password" placeholder="Password" required>
                 <button class="btn-main" type="submit">Login</button>
             </form>
-            <hr style="border-color: #334155; margin: 10px 0;">
-            <h3>Naya Account:</h3>
+            <div style="margin: 10px 0; color:#8696a0;">OR</div>
             <form action="/signup" method="POST">
                 <input type="text" name="username" placeholder="Choose Username" required>
                 <input type="password" name="password" placeholder="Choose Password" required>
-                <button class="btn-main" style="background:#10b981;" type="submit">Register</button>
+                <button class="btn-main" style="background:#202c33; color:#00a884; border:1px solid #00a884;" type="submit">Create New Account</button>
             </form>
         </div>
         {% else %}
         <!-- HEADER -->
         <div class="header">
-            <div>👤 {{ session.username }}</div>
+            <div class="user-info">
+                <span class="avatar" style="width:30px; height:30px; font-size:0.8rem;">{{ session.username[0].toUpperCase() }}</span>
+                <div>
+                    <div>{{ session.username }}</div>
+                    <div style="font-size:0.68rem; color:#25d366; font-weight:normal;"><span class="online-dot"></span> Online</div>
+                </div>
+            </div>
             <div class="header-actions">
-                <button class="btn-sm" id="silentBtn" onclick="toggleSilent()">🔔 Sound ON</button>
+                <button class="btn-sm" id="silentBtn" onclick="toggleSilent()">🔔 Sound</button>
                 <a href="/logout" class="btn-sm btn-danger" style="text-decoration:none;">Exit</a>
             </div>
         </div>
 
-        <!-- TABS -->
+        <!-- NAVIGATION TABS -->
         <div class="tabs">
-            <div class="tab active" onclick="switchTab('chats')">💬 Chat</div>
-            <div class="tab" onclick="switchTab('groups')">👨‍👩‍👧‍👦 Groups</div>
-            <div class="tab" onclick="switchTab('search')">🔍 Search</div>
-            <div class="tab" onclick="switchTab('profile')">⚙️ Profile</div>
+            <div class="tab active" onclick="switchTab('chats', this)">💬 Chat</div>
+            <div class="tab" onclick="switchTab('groups', this)">👨‍👩‍👧‍👦 Groups</div>
+            <div class="tab" onclick="switchTab('search', this)">🔍 Search</div>
+            <div class="tab" id="profileTabBtn" onclick="switchTab('profile', this)">⚙️ Profile</div>
         </div>
 
-        <!-- TAB 1: CHATS -->
+        <!-- TAB 1: CHAT -->
         <div id="chats" class="section active" style="padding: 0;">
-            <div style="background: #0f172a; padding: 8px 15px; font-size: 0.8rem; color: #38bdf8;" id="roomTitle">
+            <div style="background: #202c33; padding: 8px 12px; font-size: 0.8rem; color: #00a884; font-weight:bold;" id="roomTitle">
                 Current Room: Public Room
             </div>
             <div class="chat-box" id="chatBox"></div>
 
             <div class="input-area">
-                <div class="media-btns">
-                    <label style="cursor:pointer;" title="Photo/Video/Audio Select Karein">
+                <!-- EMOJI PICKER POPUP -->
+                <div class="emoji-picker" id="emojiPicker">
+                    <span onclick="addEmoji('😊')">😊</span>
+                    <span onclick="addEmoji('😂')">😂</span>
+                    <span onclick="addEmoji('❤️')">❤️</span>
+                    <span onclick="addEmoji('👍')">👍</span>
+                    <span onclick="addEmoji('🔥')">🔥</span>
+                    <span onclick="addEmoji('🙏')">🙏</span>
+                    <span onclick="addEmoji('😍')">😍</span>
+                    <span onclick="addEmoji('😎')">😎</span>
+                </div>
+
+                <div class="input-row">
+                    <span class="icon-btn" onclick="toggleEmojiPicker()" title="Emoji Picker">😀</span>
+                    <label class="icon-btn" title="Send Photo/Video/Audio">
                         📁 <input type="file" id="fileInput" style="display:none;" onchange="uploadFile()">
                     </label>
-                    <span id="recBtn" onclick="toggleRecord()" title="Voice Message Record Karein">🎙️</span>
-                </div>
-                <div class="input-row">
+                    <span class="icon-btn" id="recBtn" onclick="toggleRecord()" title="Record Voice Note">🎙️</span>
+                    
                     <input type="text" id="messageInput" placeholder="Message likhein..." style="margin-bottom:0;" onkeypress="if(event.key==='Enter') sendMessage()">
-                    <button class="btn-sm" style="background:#0284c7; height:40px; padding:0 15px;" onclick="sendMessage()">Send</button>
+                    
+                    <button class="btn-sm" style="background:#00a884; color:#111b21; height:42px; padding:0 16px; font-weight:bold;" onclick="sendMessage()">Send</button>
                 </div>
             </div>
         </div>
 
         <!-- TAB 2: GROUPS -->
         <div id="groups" class="section">
-            <h3>Naya Group Banayein:</h3>
+            <h3 style="color:#00a884; margin-bottom:10px;">Naya Group Banayein:</h3>
             <input type="text" id="groupNameInput" placeholder="Group ka naam...">
             <button class="btn-main" onclick="createGroup()">Create Group</button>
-            <br><hr style="border-color:#334155;"><br>
-            <h3>Sabhi Groups:</h3>
-            <div id="groupList" style="margin-top:10px;"></div>
+            <br><hr style="border-color:#2a3942;"><br>
+            <h3 style="color:#e9edef; margin-bottom:10px;">Available Groups:</h3>
+            <div id="groupList"></div>
         </div>
 
         <!-- TAB 3: SEARCH & FOLLOW -->
         <div id="search" class="section">
-            <input type="text" id="searchInput" placeholder="User ko dhundhein..." onkeyup="searchUsers()">
+            <input type="text" id="searchInput" placeholder="User search karein..." onkeyup="searchUsers()">
             <div id="searchResults" style="margin-top:10px;"></div>
         </div>
 
-        <!-- TAB 4: PROFILE -->
+        <!-- TAB 4: PROFILE SETTINGS (FIXED CLICK ISSUE) -->
         <div id="profile" class="section">
-            <h3>Profile Settings</h3>
+            <h2 style="color:#00a884; margin-bottom:15px;">⚙️ Profile & Settings</h2>
+            
+            <div class="card" style="flex-direction:column; align-items:flex-start; gap:8px;">
+                <div><b>User:</b> {{ session.username }}</div>
+                <div id="userBio"><b>Bio:</b> Loading...</div>
+            </div>
+
             <br>
-            <form action="/update_profile" method="POST" enctype="multipart/form-data">
-                <label>Bio Change Karein:</label>
-                <input type="text" name="bio" placeholder="Apna bio likhein...">
-                <button class="btn-main" type="submit">Save Profile</button>
-            </form>
+            <h4 style="color:#8696a0; margin-bottom:8px;">Bio Update Karein:</h4>
+            <input type="text" id="newBioInput" placeholder="Apna naya bio likhein...">
+            <button class="btn-main" onclick="updateBio()">Save Bio</button>
+
+            <br><hr style="border-color:#2a3942;"><br>
+
+            <h4 style="color:#00a884; margin-bottom:8px;">🔒 Screen Password / PIN Lock:</h4>
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-bottom:10px;">
+                <input type="checkbox" id="lockToggle" style="width:auto; margin:0;" onchange="saveLockSetting()"> Enable Screen Lock Password
+            </label>
+            <input type="password" id="screenPinInput" placeholder="Set Screen PIN/Password">
+            <button class="btn-main" style="background:#202c33; color:#00a884; border:1px solid #00a884;" onclick="saveLockSetting()">Save Lock Settings</button>
         </div>
 
         <script>
@@ -178,18 +238,35 @@ HTML_TEMPLATE = """
             let silentMode = false;
             let mediaRecorder, audioChunks = [];
             let isRecording = false;
+            let screenLockEnabled = false;
+            let screenPin = '';
 
-            function switchTab(tabId) {
+            function switchTab(tabId, element) {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-                event.target.classList.add('active');
-                document.getElementById(tabId).classList.add('active');
+                
+                if(element) element.classList.add('active');
+                const targetSec = document.getElementById(tabId);
+                if(targetSec) targetSec.classList.add('active');
+
                 if(tabId === 'groups') loadGroups();
+                if(tabId === 'profile') loadProfileData();
+            }
+
+            function toggleEmojiPicker() {
+                const picker = document.getElementById('emojiPicker');
+                picker.style.display = (picker.style.display === 'flex') ? 'none' : 'flex';
+            }
+
+            function addEmoji(emoji) {
+                const input = document.getElementById('messageInput');
+                input.value += emoji;
+                toggleEmojiPicker();
             }
 
             function toggleSilent() {
                 silentMode = !silentMode;
-                document.getElementById('silentBtn').innerText = silentMode ? '🔕 Silent' : '🔔 Sound ON';
+                document.getElementById('silentBtn').innerText = silentMode ? '🔕 Mute' : '🔔 Sound';
             }
 
             function fetchMessages() {
@@ -209,11 +286,10 @@ HTML_TEMPLATE = """
                             } else if(msg.msg_type === 'video') {
                                 contentHtml += `<video src="${msg.file_url}" controls></video>`;
                             } else if(msg.msg_type === 'audio') {
-                                contentHtml += `<audio src="${msg.file_url}" controls style="max-width:200px; margin-top:5px;"></audio>`;
+                                contentHtml += `<audio src="${msg.file_url}" controls style="max-width:210px; margin-top:5px;"></audio>`;
                             }
 
-                            div.innerHTML = `<span class="sender-name">${isMe ? 'You' : msg.sender}</span>${contentHtml}
-                                <div class="reaction-bar" onclick="addReaction(${msg.id})">❤️ 👍 😂 <span>+</span></div>`;
+                            div.innerHTML = `<span class="sender-name">${isMe ? 'You' : msg.sender}</span>${contentHtml}<span class="msg-time">✓✓</span>`;
                             chatBox.appendChild(div);
                         });
                     });
@@ -231,6 +307,10 @@ HTML_TEMPLATE = """
                 }).then(() => {
                     input.value = '';
                     fetchMessages();
+                    setTimeout(() => {
+                        const chatBox = document.getElementById('chatBox');
+                        chatBox.scrollTop = chatBox.scrollHeight;
+                    }, 200);
                 });
             }
 
@@ -264,12 +344,12 @@ HTML_TEMPLATE = """
                         };
                         mediaRecorder.start();
                         isRecording = true;
-                        document.getElementById('recBtn').innerText = '🛑 Recording...';
+                        document.getElementById('recBtn').style.color = '#ef4444';
                     });
                 } else {
                     mediaRecorder.stop();
                     isRecording = false;
-                    document.getElementById('recBtn').innerText = '🎙️';
+                    document.getElementById('recBtn').style.color = '#8696a0';
                 }
             }
 
@@ -291,9 +371,9 @@ HTML_TEMPLATE = """
                     const list = document.getElementById('groupList');
                     list.innerHTML = '';
                     data.forEach(g => {
-                        list.innerHTML += `<div class="user-card">
+                        list.innerHTML += `<div class="card">
                             <span><b># ${g.name}</b></span>
-                            <button class="btn-sm" onclick="joinGroup('${g.name}')">Join Chat</button>
+                            <button class="btn-sm" style="background:#00a884; color:#111b21;" onclick="joinGroup('${g.name}')">Join Chat</button>
                         </div>`;
                     });
                 });
@@ -302,7 +382,7 @@ HTML_TEMPLATE = """
             function joinGroup(groupName) {
                 currentRoom = groupName;
                 document.getElementById('roomTitle').innerText = "Current Room: " + currentRoom;
-                switchTab('chats');
+                switchTab('chats', document.querySelectorAll('.tab')[0]);
                 fetchMessages();
             }
 
@@ -315,9 +395,9 @@ HTML_TEMPLATE = """
                         const resDiv = document.getElementById('searchResults');
                         resDiv.innerHTML = '';
                         users.forEach(u => {
-                            resDiv.innerHTML += `<div class="user-card">
+                            resDiv.innerHTML += `<div class="card">
                                 <div><span class="avatar">${u.username[0].toUpperCase()}</span> <b>${u.username}</b></div>
-                                <button class="btn-sm" onclick="followUser('${u.username}')">Follow</button>
+                                <button class="btn-sm" style="background:#00a884; color:#111b21;" onclick="followUser('${u.username}')">Follow</button>
                             </div>`;
                         });
                     });
@@ -331,8 +411,56 @@ HTML_TEMPLATE = """
                 }).then(() => alert(username + " ko Follow kar liya gaya hai!"));
             }
 
+            function loadProfileData() {
+                fetch('/get_profile').then(res => res.json()).then(data => {
+                    document.getElementById('userBio').innerHTML = "<b>Bio:</b> " + data.bio;
+                    document.getElementById('lockToggle').checked = data.lock_enabled === 1;
+                    screenLockEnabled = data.lock_enabled === 1;
+                    screenPin = data.screen_pin;
+                    checkLock();
+                });
+            }
+
+            function updateBio() {
+                const bio = document.getElementById('newBioInput').value.trim();
+                fetch('/update_profile', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({'bio': bio})
+                }).then(() => {
+                    alert("Bio Updated!");
+                    loadProfileData();
+                });
+            }
+
+            function saveLockSetting() {
+                const enabled = document.getElementById('lockToggle').checked ? 1 : 0;
+                const pin = document.getElementById('screenPinInput').value.trim();
+                fetch('/save_lock_setting', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({'enabled': enabled, 'pin': pin})
+                }).then(() => alert("Lock Settings Saved!"));
+            }
+
+            function checkLock() {
+                if(screenLockEnabled) {
+                    document.getElementById('lockScreen').style.display = 'flex';
+                }
+            }
+
+            function unlockApp() {
+                const entered = document.getElementById('unlockPin').value;
+                if(entered === screenPin) {
+                    document.getElementById('lockScreen').style.display = 'none';
+                } else {
+                    alert("Incorrect Password/PIN!");
+                }
+            }
+
             setInterval(fetchMessages, 2500);
             fetchMessages();
+            loadProfileData();
         </script>
         {% endif %}
     </div>
@@ -480,6 +608,19 @@ def follow_user():
         conn.close()
     return jsonify({'status': 'ok'})
 
+@app.route('/get_profile')
+def get_profile():
+    if 'username' not in session:
+        return jsonify({})
+    conn = sqlite3.connect('chat.db')
+    c = conn.cursor()
+    c.execute("SELECT bio, lock_enabled, screen_pin FROM users WHERE username=?", (session['username'],))
+    row = c.fetchone()
+    conn.close()
+    if row:
+        return jsonify({'bio': row[0], 'lock_enabled': row[1], 'screen_pin': row[2]})
+    return jsonify({})
+
 @app.route('/update_profile', methods=['POST'])
 def update_profile():
     bio = request.form.get('bio', '')
@@ -489,7 +630,19 @@ def update_profile():
         c.execute("UPDATE users SET bio=? WHERE username=?", (bio, session['username']))
         conn.commit()
         conn.close()
-    return redirect(url_for('home'))
+    return jsonify({'status': 'ok'})
+
+@app.route('/save_lock_setting', methods=['POST'])
+def save_lock_setting():
+    enabled = request.form.get('enabled', 0)
+    pin = request.form.get('pin', '')
+    if 'username' in session:
+        conn = sqlite3.connect('chat.db')
+        c = conn.cursor()
+        c.execute("UPDATE users SET lock_enabled=?, screen_pin=? WHERE username=?", (enabled, pin, session['username']))
+        conn.commit()
+        conn.close()
+    return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
