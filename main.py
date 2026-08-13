@@ -51,10 +51,10 @@ HTML_TEMPLATE = """
         .login-box input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 8px; }
         .login-box button { width: 100%; padding: 10px; background: #006652; color: white; border: none; border-radius: 8px; font-weight: bold; margin-top: 10px; }
    </style>
-    </style>
+    
 
   
-    \u003Cmeta name=\"google-site-verification\" content=\"3kNbyk_8NLgDGWLmoXRJWjb7gFWUfTWhIXTbHW-KcyA\" />  \u003C/style><meta name="google-site-verification" content="3kNbyk_8NLgDGWLmoXRJWjb7gFWUfTWhIXTbHW-KcyA" />  </style>
+    meta name=\"google-site-verification\" content=\"3kNbyk_8NLgDGWLmoXRJWjb7gFWUfTWhIXTbHW-KcyA\" />  \u003C/style><meta name="google-site-verification" content="3kNbyk_8NLgDGWLmoXRJWjb7gFWUfTWhIXTbHW-KcyA" />  </style>
 </head>
 <body>
 
