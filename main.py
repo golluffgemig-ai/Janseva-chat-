@@ -1,4 +1,4 @@
- from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
 import sqlite3
 import os
 
@@ -96,9 +96,7 @@ HTML_TEMPLATE = """
             <a href="/logout">Logout</a>
         </div>
         
-        <div class="chat-box" id="chatBox">
-            <!-- Messages dynamic load honge -->
-        </div>
+        <div class="chat-box" id="chatBox"></div>
 
         <div class="input-area">
             <input type="text" id="messageInput" placeholder="Message likhein..." onkeypress="handleKey(event)">
@@ -227,5 +225,6 @@ def send_message():
     return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-        
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
+ 
