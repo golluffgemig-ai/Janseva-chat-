@@ -54,7 +54,7 @@ HTML_TEMPLATE = """
     
 
   
-   <meta name=\"google-site-verification\" content=\"3kNbyk_8NLgDGWLmoXRJWjb7gFWUfTWhIXTbHW-KcyA\" />  \u003C/style><meta name="google-site-verification" content="3kNbyk_8NLgDGWLmoXRJWjb7gFWUfTWhIXTbHW-KcyA" />  </style>
+  <meta name="google-site-verification" content="aapka_code_yahan" /> 
 </head>
 <body>
 
