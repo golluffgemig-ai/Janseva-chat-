@@ -1,4 +1,4 @@
-import os
+2import os
 import sqlite3
 from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify, send_from_directory
 
@@ -49,6 +49,8 @@ HTML_TEMPLATE = """
         .btn-row .voice-btn { background: #e55151; }
         .login-box { padding: 20px; text-align: center; margin-auto; width: 90%; }
         .login-box input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 8px; }
+      
+        
         .login-box button { width: 100%; padding: 10px; background: #006652; color: white; border: none; border-radius: 8px; font-weight: bold; margin-top: 10px; }
   <meta name="google-site-verification" content="3kNbyk_8NLgDGWLmoXRJWjb7gFWUfTWhIXTbHW-KcyA" />  </style>
 </head>
@@ -58,6 +60,8 @@ HTML_TEMPLATE = """
     <div class="header">
         <h2>🚀 Jan Seva Free Chat</h2>
         <p id="subtitle">Bina Recharge Chat & Share</p>
+   
+    
     </div>
 
     {% if not session.get('user') %}
