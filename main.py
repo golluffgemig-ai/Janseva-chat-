@@ -92,7 +92,7 @@ HTML_TEMPLATE = """
             <button class="btn-main" style="width:200px;" onclick="unlockApp()">Unlock</button>
         </div>
 
-        {% if not session.username %}
+        {% if not user %}
         <div class="auth-box">
             <h1 style="color: #00a884;">Janseva Chat</h1>
             <form action="/login" method="POST">
@@ -110,9 +110,9 @@ HTML_TEMPLATE = """
         {% else %}
         <div class="header">
             <div class="user-info">
-                <span class="avatar">{{ session.username[0].toUpperCase() }}</span>
+                <span class="avatar">{{ user[0].upper() }}</span>
                 <div>
-                    <div>{{ session.username }}</div>
+                    <div>{{ user }}</div>
                     <div style="font-size:0.68rem; color:#25d366;"><span class="online-dot"></span> Online</div>
                 </div>
             </div>
@@ -126,7 +126,7 @@ HTML_TEMPLATE = """
             <div class="tab" onclick="switchTab('profile', this)">⚙️ Profile</div>
         </div>
 
-        <div id="chats" class="section" style="padding: 0;">
+        <div id="chats" class="section active" style="padding: 0;">
             <div style="background: #202c33; padding: 8px 12px; font-size: 0.8rem; color: #00a884; font-weight:bold;" id="roomTitle">
                 Current Room: Public Room
             </div>
@@ -161,7 +161,7 @@ HTML_TEMPLATE = """
         <div id="profile" class="section">
             <h2 style="color:#00a884; margin-bottom:15px;">⚙️ Profile Settings</h2>
             <div class="card" style="flex-direction:column; align-items:flex-start;">
-                <div><b>Username:</b> {{ session.username }}</div>
+                <div><b>Username:</b> {{ user }}</div>
                 <div id="userBio"><b>Bio:</b> Loading...</div>
             </div>
             <br>
@@ -176,7 +176,7 @@ HTML_TEMPLATE = """
 
         <script>
             let currentRoom = 'Public Room';
-            let currentUser = "{{ session.username }}";
+            let currentUser = "{{ user }}";
             let mediaRecorder, audioChunks = [];
             let isRecording = false;
             let screenLockEnabled = false, screenPin = '';
@@ -360,7 +360,8 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def home():
-    return render_template_string(HTML_TEMPLATE)
+    user = session.get('username')
+    return render_template_string(HTML_TEMPLATE, user=user)
 
 @app.route('/signup', methods=['POST'])
 def signup():
@@ -371,7 +372,8 @@ def signup():
         c.execute("INSERT INTO users (username, password) VALUES (?, ?)", (u, p))
         conn.commit()
         session['username'] = u
-    except: pass
+    except:
+        pass
     conn.close()
     return redirect(url_for('home'))
 
@@ -381,7 +383,8 @@ def login():
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE username=? AND password=?", (u, p))
-    if c.fetchone(): session['username'] = u
+    if c.fetchone():
+        session['username'] = u
     conn.close()
     return redirect(url_for('home'))
 
@@ -402,7 +405,8 @@ def get_messages():
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
-    if 'username' not in session: return jsonify({'error': 'Unauthorized'}), 401
+    if 'username' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
     c.execute("INSERT INTO messages (sender, room, content, msg_type) VALUES (?, ?, ?, ?)",
@@ -413,15 +417,19 @@ def send_message():
 
 @app.route('/upload_media', methods=['POST'])
 def upload_media():
-    if 'username' not in session or 'file' not in request.files: return jsonify({'error': 'Failed'}), 400
+    if 'username' not in session or 'file' not in request.files:
+        return jsonify({'error': 'Failed'}), 400
     file = request.files['file']
     filename = secure_filename(file.filename)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(filepath)
     msg_type = 'file'
-    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')): msg_type = 'image'
-    elif filename.lower().endswith(('.mp4', '.mkv', '.webm')): msg_type = 'video'
-    elif filename.lower().endswith(('.mp3', '.wav', '.ogg')): msg_type = 'audio'
+    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+        msg_type = 'image'
+    elif filename.lower().endswith(('.mp4', '.mkv', '.webm')):
+        msg_type = 'video'
+    elif filename.lower().endswith(('.mp3', '.wav', '.ogg')):
+        msg_type = 'audio'
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
     c.execute("INSERT INTO messages (sender, room, content, msg_type, file_url) VALUES (?, ?, ?, ?, ?)",
@@ -438,7 +446,8 @@ def create_group():
         try:
             c.execute("INSERT INTO groups (name, created_by) VALUES (?, ?)", (request.form.get('name'), session['username']))
             conn.commit()
-        except: pass
+        except:
+            pass
         conn.close()
     return jsonify({'status': 'ok'})
 
@@ -472,7 +481,8 @@ def follow_user():
 
 @app.route('/get_profile')
 def get_profile():
-    if 'username' not in session: return jsonify({})
+    if 'username' not in session:
+        return jsonify({})
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
     c.execute("SELECT bio, lock_enabled, screen_pin FROM users WHERE username=?", (session['username'],))
