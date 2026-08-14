@@ -1,4 +1,4 @@
-wfrom flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
 import sqlite3
 import os
 from werkzeug.utils import secure_filename
@@ -57,7 +57,7 @@ HTML_TEMPLATE = """
         .header { background: #202c33; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222d34; }
         .user-info { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 1rem; color: #e9edef; }
         .online-dot { width: 9px; height: 9px; background-color: #25d366; border-radius: 50%; display: inline-block; }
-        .btn-sm { background: #2a3942; color: #d1d7db; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .btn-sm { background: #2a3942; color: #d1d7db; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
         .btn-danger { background: #ea868f; color: #000; font-weight: bold; }
         .tabs { display: flex; background: #111b21; border-bottom: 2px solid #222d34; }
         .tab { flex: 1; text-align: center; padding: 12px 0; cursor: pointer; font-size: 0.9rem; color: #8696a0; font-weight: 500; }
@@ -65,7 +65,21 @@ HTML_TEMPLATE = """
         .section { display: none; flex: 1; flex-direction: column; overflow-y: auto; padding: 12px; position: relative; }
         .section.active { display: flex; }
         .auth-box { padding: 25px 20px; display: flex; flex-direction: column; gap: 14px; text-align: center; justify-content: center; height: 100%; }
-        input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #2a3942; background: #202c33; color: #e9edef; outline: none; margin-bottom: 8px; font-size: 0.95rem; }
+        
+        /* Fixed Input Text & Contrast Visibility */
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            border-radius: 8px; 
+            border: 1px solid #2a3942; 
+            background: #202c33 !important; 
+            color: #ffffff !important; 
+            outline: none; 
+            margin-bottom: 8px; 
+            font-size: 0.95rem; 
+        }
+        input::placeholder { color: #8696a0 !important; }
+        
         button.btn-main { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #00a884; color: #111b21; font-weight: bold; cursor: pointer; font-size: 1rem; }
         .chat-box { flex: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; background-color: #0b141a; }
         .msg { max-width: 80%; padding: 8px 10px; border-radius: 8px; font-size: 0.9rem; position: relative; word-wrap: break-word; }
@@ -79,7 +93,7 @@ HTML_TEMPLATE = """
         .icon-btn { font-size: 1.3rem; cursor: pointer; padding: 6px; color: #8696a0; }
         .emoji-picker { display: none; background: #111b21; padding: 8px; border-radius: 8px; border: 1px solid #2a3942; flex-wrap: wrap; gap: 8px; max-height: 100px; overflow-y: auto; }
         .emoji-picker span { font-size: 1.3rem; cursor: pointer; }
-        .card { background: #202c33; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .card { background: #202c33; color: #e9edef !important; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
         .avatar { width: 36px; height: 36px; border-radius: 50%; background: #00a884; color: #111b21; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 8px; }
         #lockScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0b141a; z-index: 9999; display: none; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
     </style>
@@ -169,7 +183,7 @@ HTML_TEMPLATE = """
             <button class="btn-main" onclick="updateBio()">Save Bio</button>
             <br><hr style="border-color:#2a3942;"><br>
             <h4 style="color:#00a884; margin-bottom:8px;">🔒 Screen Password:</h4>
-            <label><input type="checkbox" id="lockToggle"> Enable Screen Lock</label>
+            <label style="color:#e9edef;"><input type="checkbox" id="lockToggle"> Enable Screen Lock</label>
             <input type="password" id="screenPinInput" placeholder="Set PIN/Password">
             <button class="btn-main" onclick="saveLockSetting()">Save Lock</button>
         </div>
@@ -278,7 +292,7 @@ HTML_TEMPLATE = """
                     const list = document.getElementById('groupList');
                     list.innerHTML = '';
                     data.forEach(g => {
-                        list.innerHTML += `<div class="card"><span><b># ${g.name}</b></span><button class="btn-sm" style="background:#00a884; color:#111b21;" onclick="joinGroup('${g.name}')">Join Chat</button></div>`;
+                        list.innerHTML += `<div class="card"><span><b># ${g.name}</b></span><button class="btn-sm" style="background:#00a884; color:#111b21; font-weight:bold;" onclick="joinGroup('${g.name}')">Join Chat</button></div>`;
                     });
                 });
             }
@@ -297,17 +311,29 @@ HTML_TEMPLATE = """
                     const resDiv = document.getElementById('searchResults');
                     resDiv.innerHTML = '';
                     users.forEach(u => {
-                        resDiv.innerHTML += `<div class="card"><div><span class="avatar">${u.username[0].toUpperCase()}</span> <b>${u.username}</b></div><button class="btn-sm" style="background:#00a884; color:#111b21;" onclick="followUser('${u.username}')">Follow</button></div>`;
+                        const isFollowing = u.is_following;
+                        resDiv.innerHTML += `<div class="card">
+                            <div><span class="avatar">${u.username[0].toUpperCase()}</span> <b style="color:#e9edef;">${u.username}</b></div>
+                            <button class="btn-sm" style="background:${isFollowing ? '#2a3942' : '#00a884'}; color:${isFollowing ? '#00a884' : '#111b21'}; font-weight:bold;" onclick="followUser('${u.username}', this)">
+                                ${isFollowing ? 'Following ✓' : 'Follow'}
+                            </button>
+                        </div>`;
                     });
                 });
             }
 
-            function followUser(username) {
+            function followUser(username, btn) {
                 fetch('/follow_user', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: new URLSearchParams({'target': username})
-                }).then(() => alert(username + " ko Follow kiya!"));
+                }).then(() => {
+                    if(btn) {
+                        btn.innerText = 'Following ✓';
+                        btn.style.background = '#2a3942';
+                        btn.style.color = '#00a884';
+                    }
+                });
             }
 
             function loadProfileData() {
@@ -462,12 +488,18 @@ def get_groups():
 
 @app.route('/search_users')
 def search_users():
+    me = session.get('username')
+    q = request.args.get('q', '')
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
-    c.execute("SELECT username FROM users WHERE username LIKE ?", ('%' + request.args.get('q', '') + '%',))
-    rows = c.fetchall()
+    c.execute("SELECT username FROM users WHERE username LIKE ?", ('%' + q + '%',))
+    users = [r[0] for r in c.fetchall() if r[0] != me]
+    
+    c.execute("SELECT followed FROM follows WHERE follower=?", (me,))
+    following = set(r[0] for r in c.fetchall())
     conn.close()
-    return jsonify([{'username': r[0]} for r in rows if r[0] != session.get('username')])
+    
+    return jsonify([{'username': u, 'is_following': (u in following)} for u in users])
 
 @app.route('/follow_user', methods=['POST'])
 def follow_user():
@@ -514,7 +546,5 @@ def save_lock_setting():
     return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-     if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
