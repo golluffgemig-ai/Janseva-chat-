@@ -516,4 +516,26 @@ def save_lock_setting():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #2a3942;
+    background: #202c33;
+    color: #ffffff !important; /* Text visible karne ke liye */
+    outline: none;
+    margin-bottom: 8px;
+    font-size: 0.95rem;}
+
+.card {
+    background: #202c33;
+    color: #e9edef !important;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 
