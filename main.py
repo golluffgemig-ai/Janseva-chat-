@@ -13,6 +13,8 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 def init_db():
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
+    
+    # Create base tables
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   username TEXT UNIQUE, 
@@ -21,6 +23,14 @@ def init_db():
                   avatar TEXT DEFAULT '',
                   lock_enabled INTEGER DEFAULT 0,
                   screen_pin TEXT DEFAULT '')''')
+
+    # Auto-repair missing columns if old chat.db exists
+    for col in ['bio', 'avatar', 'lock_enabled', 'screen_pin']:
+        try:
+            c.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT ''")
+        except:
+            pass
+
     c.execute('''CREATE TABLE IF NOT EXISTS messages
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   sender TEXT, 
@@ -29,6 +39,13 @@ def init_db():
                   msg_type TEXT DEFAULT 'text', 
                   file_url TEXT DEFAULT '', 
                   timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    for col in ['msg_type', 'file_url']:
+        try:
+            c.execute(f"ALTER TABLE messages ADD COLUMN {col} TEXT DEFAULT ''")
+        except:
+            pass
+
     c.execute('''CREATE TABLE IF NOT EXISTS follows
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, follower TEXT, followed TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS groups
@@ -38,6 +55,7 @@ def init_db():
         c.execute("INSERT INTO groups (name, created_by) VALUES ('Public Room', 'System')")
     except:
         pass
+        
     conn.commit()
     conn.close()
 
@@ -54,19 +72,18 @@ HTML_TEMPLATE = """
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
         body { background-color: #0b141a; color: #e9edef; height: 100vh; display: flex; justify-content: center; align-items: center; overflow: hidden; }
         .container { width: 100%; max-width: 450px; height: 100vh; background: #111b21; display: flex; flex-direction: column; position: relative; }
-        .header { background: #202c33; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222d34; }
+        .header { background: #202c33; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #222d34; z-index: 10; }
         .user-info { display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 1rem; color: #e9edef; }
         .online-dot { width: 9px; height: 9px; background-color: #25d366; border-radius: 50%; display: inline-block; }
         .btn-sm { background: #2a3942; color: #d1d7db; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
         .btn-danger { background: #ea868f; color: #000; font-weight: bold; }
-        .tabs { display: flex; background: #111b21; border-bottom: 2px solid #222d34; }
+        .tabs { display: flex; background: #111b21; border-bottom: 2px solid #222d34; z-index: 10; }
         .tab { flex: 1; text-align: center; padding: 12px 0; cursor: pointer; font-size: 0.9rem; color: #8696a0; font-weight: 500; }
         .tab.active { color: #00a884; border-bottom: 3px solid #00a884; font-weight: bold; }
         .section { display: none; flex: 1; flex-direction: column; overflow-y: auto; padding: 12px; position: relative; }
         .section.active { display: flex; }
         .auth-box { padding: 25px 20px; display: flex; flex-direction: column; gap: 14px; text-align: center; justify-content: center; height: 100%; }
         
-        /* Fixed Input Text & Contrast Visibility */
         input { 
             width: 100%; 
             padding: 12px; 
@@ -85,14 +102,14 @@ HTML_TEMPLATE = """
         .msg { max-width: 80%; padding: 8px 10px; border-radius: 8px; font-size: 0.9rem; position: relative; word-wrap: break-word; }
         .msg.sent { align-self: flex-end; background: #005c4b; color: #e9edef; }
         .msg.received { align-self: flex-start; background: #202c33; color: #e9edef; }
-        .msg img, .msg video { max-width: 100%; border-radius: 6px; margin-top: 5px; }
+        .msg img, .msg video { max-width: 100%; border-radius: 6px; margin-top: 5px; display: block; }
         .sender-name { font-size: 0.72rem; color: #00a884; font-weight: bold; display: block; margin-bottom: 2px; }
         .msg-time { font-size: 0.65rem; color: #8696a0; text-align: right; margin-top: 4px; display: block; }
-        .input-area { padding: 8px; background: #202c33; display: flex; flex-direction: column; gap: 6px; }
+        .input-area { padding: 8px; background: #202c33; display: flex; flex-direction: column; gap: 6px; position: relative; z-index: 20; }
         .input-row { display: flex; gap: 6px; align-items: center; }
-        .icon-btn { font-size: 1.3rem; cursor: pointer; padding: 6px; color: #8696a0; }
-        .emoji-picker { display: none; background: #111b21; padding: 8px; border-radius: 8px; border: 1px solid #2a3942; flex-wrap: wrap; gap: 8px; max-height: 100px; overflow-y: auto; }
-        .emoji-picker span { font-size: 1.3rem; cursor: pointer; }
+        .icon-btn { font-size: 1.3rem; cursor: pointer; padding: 6px; color: #8696a0; user-select: none; }
+        .emoji-picker { display: none; background: #111b21; padding: 8px; border-radius: 8px; border: 1px solid #2a3942; flex-wrap: wrap; gap: 8px; max-height: 100px; overflow-y: auto; position: absolute; bottom: 55px; left: 8px; right: 8px; z-index: 30; }
+        .emoji-picker span { font-size: 1.4rem; cursor: pointer; }
         .card { background: #202c33; color: #e9edef !important; padding: 12px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
         .avatar { width: 36px; height: 36px; border-radius: 50%; background: #00a884; color: #111b21; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 8px; }
         #lockScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0b141a; z-index: 9999; display: none; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
@@ -220,18 +237,20 @@ HTML_TEMPLATE = """
                     .then(data => {
                         const chatBox = document.getElementById('chatBox');
                         chatBox.innerHTML = '';
-                        data.forEach(msg => {
-                            const isMe = msg.sender === currentUser;
-                            const div = document.createElement('div');
-                            div.className = 'msg ' + (isMe ? 'sent' : 'received');
-                            let contentHtml = `<div>${msg.content}</div>`;
-                            if(msg.msg_type === 'image') contentHtml += `<img src="${msg.file_url}">`;
-                            if(msg.msg_type === 'video') contentHtml += `<video src="${msg.file_url}" controls></video>`;
-                            if(msg.msg_type === 'audio') contentHtml += `<audio src="${msg.file_url}" controls style="max-width:210px;"></audio>`;
-                            div.innerHTML = `<span class="sender-name">${isMe ? 'You' : msg.sender}</span>${contentHtml}<span class="msg-time">✓✓</span>`;
-                            chatBox.appendChild(div);
-                        });
-                    });
+                        if(Array.isArray(data)) {
+                            data.forEach(msg => {
+                                const isMe = msg.sender === currentUser;
+                                const div = document.createElement('div');
+                                div.className = 'msg ' + (isMe ? 'sent' : 'received');
+                                let contentHtml = `<div>${msg.content || ''}</div>`;
+                                if(msg.msg_type === 'image') contentHtml += `<img src="${msg.file_url}">`;
+                                if(msg.msg_type === 'video') contentHtml += `<video src="${msg.file_url}" controls></video>`;
+                                if(msg.msg_type === 'audio') contentHtml += `<audio src="${msg.file_url}" controls style="max-width:210px;"></audio>`;
+                                div.innerHTML = `<span class="sender-name">${isMe ? 'You' : msg.sender}</span>${contentHtml}<span class="msg-time">✓✓</span>`;
+                                chatBox.appendChild(div);
+                            });
+                        }
+                    }).catch(err => console.log('Error fetching messages'));
             }
 
             function sendMessage() {
@@ -241,7 +260,7 @@ HTML_TEMPLATE = """
                     method: 'POST',
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: new URLSearchParams({'content': input.value, 'room': currentRoom, 'msg_type': 'text'})
-                }).then(() => { input.value = ''; fetchMessages(); });
+                }).then(() => { input.value = ''; fetchMessages(); }).catch(e => console.log(e));
             }
 
             function uploadFile() {
@@ -250,7 +269,7 @@ HTML_TEMPLATE = """
                 const formData = new FormData();
                 formData.append('file', fileInput.files[0]);
                 formData.append('room', currentRoom);
-                fetch('/upload_media', { method: 'POST', body: formData }).then(() => { fileInput.value = ''; fetchMessages(); });
+                fetch('/upload_media', { method: 'POST', body: formData }).then(() => { fileInput.value = ''; fetchMessages(); }).catch(e => console.log(e));
             }
 
             function toggleRecord() {
@@ -269,7 +288,7 @@ HTML_TEMPLATE = """
                         mediaRecorder.start();
                         isRecording = true;
                         document.getElementById('recBtn').style.color = '#ef4444';
-                    });
+                    }).catch(() => alert("Microphone Permission Chahiye!"));
                 } else {
                     mediaRecorder.stop();
                     isRecording = false;
@@ -345,7 +364,7 @@ HTML_TEMPLATE = """
                         screenPin = data.screen_pin || '';
                         if(screenLockEnabled && screenPin) document.getElementById('lockScreen').style.display = 'flex';
                     }
-                });
+                }).catch(e => console.log(e));
             }
 
             function updateBio() {
@@ -424,10 +443,14 @@ def get_messages():
     room = request.args.get('room', 'Public Room')
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
-    c.execute("SELECT id, sender, content, msg_type, file_url FROM messages WHERE room=? ORDER BY id ASC", (room,))
-    rows = c.fetchall()
-    conn.close()
-    return jsonify([{'id': r[0], 'sender': r[1], 'content': r[2], 'msg_type': r[3], 'file_url': r[4]} for r in rows])
+    try:
+        c.execute("SELECT id, sender, content, msg_type, file_url FROM messages WHERE room=? ORDER BY id ASC", (room,))
+        rows = c.fetchall()
+        conn.close()
+        return jsonify([{'id': r[0], 'sender': r[1], 'content': r[2], 'msg_type': r[3], 'file_url': r[4]} for r in rows])
+    except Exception as e:
+        conn.close()
+        return jsonify([])
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
@@ -436,7 +459,7 @@ def send_message():
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
     c.execute("INSERT INTO messages (sender, room, content, msg_type) VALUES (?, ?, ?, ?)",
-              (session['username'], request.form.get('room'), request.form.get('content'), request.form.get('msg_type')))
+              (session['username'], request.form.get('room'), request.form.get('content'), 'text'))
     conn.commit()
     conn.close()
     return jsonify({'status': 'ok'})
@@ -517,11 +540,14 @@ def get_profile():
         return jsonify({})
     conn = sqlite3.connect('chat.db')
     c = conn.cursor()
-    c.execute("SELECT bio, lock_enabled, screen_pin FROM users WHERE username=?", (session['username'],))
-    row = c.fetchone()
-    conn.close()
-    if row:
-        return jsonify({'bio': row[0], 'lock_enabled': row[1], 'screen_pin': row[2]})
+    try:
+        c.execute("SELECT bio, lock_enabled, screen_pin FROM users WHERE username=?", (session['username'],))
+        row = c.fetchone()
+        conn.close()
+        if row:
+            return jsonify({'bio': row[0], 'lock_enabled': row[1], 'screen_pin': row[2]})
+    except Exception as e:
+        conn.close()
     return jsonify({})
 
 @app.route('/update_profile', methods=['POST'])
